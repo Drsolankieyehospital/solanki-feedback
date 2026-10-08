@@ -1,0 +1,85 @@
+name: Nightly database backup
+
+# 02:00 IST = 20:30 UTC. Also runnable on demand.
+on:
+  schedule:
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BUCKET: backups
+    steps:
+      - name: Install postgresql-client 16
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update && sudo apt-get install -y postgresql-client-16
+
+      - name: Dump and gzip
+        run: |
+          set -euo pipefail
+          STAMP=$(TZ=Asia/Kolkata date +%F)
+          pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges | gzip -9 > "dump-$STAMP.sql.gz"
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          echo "DUMP=dump-$STAMP.sql.gz" >> "$GITHUB_ENV"
+          ls -lh "dump-$STAMP.sql.gz"
+
+      - name: Upload to Supabase Storage (daily)
+        run: |
+          set -euo pipefail
+          curl -fsSL -X POST \
+            "$SUPABASE_URL/storage/v1/object/$BUCKET/daily/$STAMP.sql.gz" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "Content-Type: application/gzip" \
+            -H "x-upsert: true" \
+            --data-binary "@$DUMP"
+
+      - name: Upload monthly copy (on the 1st)
+        if: ${{ endsWith(env.STAMP, '-01') }}
+        run: |
+          set -euo pipefail
+          MONTH=$(echo "$STAMP" | cut -c1-7)
+          curl -fsSL -X POST \
+            "$SUPABASE_URL/storage/v1/object/$BUCKET/monthly/$MONTH.sql.gz" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "Content-Type: application/gzip" \
+            -H "x-upsert: true" \
+            --data-binary "@$DUMP"
+
+      - name: Prune old backups (keep 30 dailies, 12 monthlies)
+        run: |
+          set -euo pipefail
+          prune() {
+            local prefix="$1" keep="$2"
+            local list
+            list=$(curl -fsSL -X POST \
+              "$SUPABASE_URL/storage/v1/object/list/$BUCKET" \
+              -H "Authorization: Bearer $SERVICE_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"prefix\":\"$prefix/\",\"limit\":1000,\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}")
+            echo "$list" | jq -r '.[].name' | tail -n +"$((keep+1))" | while read -r name; do
+              [ -z "$name" ] && continue
+              echo "deleting $prefix/$name"
+              curl -fsSL -X DELETE "$SUPABASE_URL/storage/v1/object/$BUCKET/$prefix/$name" \
+                -H "Authorization: Bearer $SERVICE_KEY"
+            done
+          }
+          prune daily 30
+          prune monthly 12
+
+      - name: Upload workflow artifact (fallback copy)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ env.STAMP }}
+          path: ${{ env.DUMP }}
+          retention-days: 35

@@ -17,6 +17,40 @@ export const FALLBACK_STAFF: Pick<OpdStaff, "id" | "name_en" | "name_kn">[] = [
 
 export type StaffOption = Pick<OpdStaff, "id" | "name_en" | "name_kn">;
 
+export interface StaffRow {
+  id: string;
+  name_en: string;
+  name_kn: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+/** All staff (active + inactive) for the admin management page. */
+export async function getAllStaff(): Promise<{ live: boolean; rows: StaffRow[] }> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return {
+      live: false,
+      rows: FALLBACK_STAFF.map((s, i) => ({
+        ...s,
+        is_active: true,
+        sort_order: i + 1,
+      })),
+    };
+  }
+  try {
+    const { createServiceClient } = await import("./supabase/service");
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("opd_staff")
+      .select("id, name_en, name_kn, is_active, sort_order")
+      .order("sort_order");
+    if (error || !data) return { live: false, rows: [] };
+    return { live: true, rows: data };
+  } catch {
+    return { live: false, rows: [] };
+  }
+}
+
 /**
  * Active OPD staff for the form dropdown. Tries Supabase; falls back to the
  * seed list if env/DB is not configured yet (local dev before Phase 2 is run).

@@ -76,7 +76,15 @@ export default async function FeedbackListPage({
               ? "No results"
               : `Showing ${from}–${to} of ${result.total.toLocaleString("en-IN")}`}
           </span>
-          {!isViewer && <ExportButton />}
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/feedback/new"
+              className="rounded-lg border border-divider bg-surface px-3 py-1.5 text-[12px] font-semibold text-primary hover:bg-primary-tint"
+            >
+              + Manual entry
+            </Link>
+            {!isViewer && <ExportButton />}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse">
