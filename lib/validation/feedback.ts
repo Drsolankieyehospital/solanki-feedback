@@ -23,8 +23,16 @@ export const feedbackSchema = z.object({
   mobile: z
     .string()
     .trim()
-    // strip +91 / spaces / leading 0 before validating
-    .transform((v) => v.replace(/[\s-]/g, "").replace(/^(\+?91|0)/, ""))
+    // Normalise length-aware: only strip a country code / leading 0 when the
+    // extra digits are actually there. A bare 10-digit number that happens to
+    // start with "91" (e.g. 9187474054) must NOT be truncated.
+    .transform((v) => {
+      let s = v.replace(/[\s-]/g, "");
+      if (s.startsWith("+91")) s = s.slice(3);
+      else if (s.length === 12 && s.startsWith("91")) s = s.slice(2);
+      else if (s.length === 11 && s.startsWith("0")) s = s.slice(1);
+      return s;
+    })
     .pipe(z.string().regex(/^[6-9][0-9]{9}$/, "errMobile")),
   visit_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "errDate"),
   // Non-empty here; the server verifies the id exists and is active (Phase 4).
