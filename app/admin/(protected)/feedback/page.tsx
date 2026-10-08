@@ -20,6 +20,8 @@ function parseFilters(sp: SP): FeedbackFilters {
   const ratingStr = one(sp.rating);
   return {
     q: one(sp.q),
+    from: one(sp.from),
+    to: one(sp.to),
     staff: one(sp.staff)?.split(",").filter(Boolean),
     rating: ratingStr ? [Number(ratingStr)] : undefined,
     low: one(sp.low) === "1",

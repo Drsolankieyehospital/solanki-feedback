@@ -85,6 +85,102 @@ export interface DashboardData {
 }
 
 // ---------------------------------------------------------------------------
+// Reports (staff + date) — reuses the report RPCs with a sample fallback.
+// ---------------------------------------------------------------------------
+export interface ReportsData {
+  live: boolean;
+  staff: StaffSummaryRow[];
+  daily: DailySummaryRow[];
+}
+
+export async function getReports(range: DateRange): Promise<ReportsData> {
+  if (!authConfigured()) {
+    const s = sampleDashboard();
+    return { live: false, staff: s.staff, daily: s.daily };
+  }
+  try {
+    const supabase = await createClient();
+    const [staffRes, dailyRes] = await Promise.all([
+      supabase.rpc("staff_summary", { from_date: range.from, to_date: range.to }),
+      supabase.rpc("daily_summary", { from_date: range.from, to_date: range.to }),
+    ]);
+    return {
+      live: true,
+      staff: (staffRes.data as StaffSummaryRow[]) ?? [],
+      daily: (dailyRes.data as DailySummaryRow[]) ?? [],
+    };
+  } catch {
+    const s = sampleDashboard();
+    return { live: false, staff: s.staff, daily: s.daily };
+  }
+}
+
+export type GroupBy = "day" | "week" | "month";
+
+export interface GroupedPeriod {
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+  cnt: number;
+  avg_overall: number;
+  avg_reception: number;
+  avg_cleanliness: number;
+  pct_recommend: number;
+}
+
+/** Aggregate per-day rows into day / week / month buckets (weighted averages). */
+export function groupDaily(
+  daily: DailySummaryRow[],
+  group: GroupBy,
+): GroupedPeriod[] {
+  const buckets = new Map<string, { label: string; from: string; to: string; rows: DailySummaryRow[] }>();
+
+  for (const d of daily) {
+    const date = new Date(d.day + "T00:00:00Z");
+    let key: string, label: string;
+    if (group === "day") {
+      key = d.day;
+      label = date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    } else if (group === "month") {
+      key = d.day.slice(0, 7);
+      label = date.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+    } else {
+      // ISO week starting Monday
+      const monday = new Date(date);
+      const dow = (date.getUTCDay() + 6) % 7;
+      monday.setUTCDate(date.getUTCDate() - dow);
+      key = monday.toISOString().slice(0, 10);
+      label = `Week of ${monday.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+    }
+    const b = buckets.get(key) ?? { label, from: d.day, to: d.day, rows: [] };
+    b.rows.push(d);
+    if (d.day < b.from) b.from = d.day;
+    if (d.day > b.to) b.to = d.day;
+    buckets.set(key, b);
+  }
+
+  const wavg = (rows: DailySummaryRow[], pick: (r: DailySummaryRow) => number) => {
+    const total = rows.reduce((s, r) => s + r.cnt, 0) || 1;
+    return Math.round((rows.reduce((s, r) => s + pick(r) * r.cnt, 0) / total) * 100) / 100;
+  };
+
+  return [...buckets.entries()]
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([key, b]) => ({
+      key,
+      label: b.label,
+      from: b.from,
+      to: b.to,
+      cnt: b.rows.reduce((s, r) => s + r.cnt, 0),
+      avg_overall: wavg(b.rows, (r) => r.avg_overall),
+      avg_reception: wavg(b.rows, (r) => r.avg_reception),
+      avg_cleanliness: wavg(b.rows, (r) => r.avg_cleanliness),
+      pct_recommend: Math.round(wavg(b.rows, (r) => r.pct_recommend) * 10) / 10,
+    }));
+}
+
+// ---------------------------------------------------------------------------
 // Live data (Supabase) with a sample fallback for local dev.
 // ---------------------------------------------------------------------------
 export async function getDashboardData(range: DateRange): Promise<DashboardData> {
