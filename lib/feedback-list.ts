@@ -54,6 +54,33 @@ export interface FeedbackListResult {
   pages: number;
 }
 
+/** Parse URL search params into feedback filters (shared by list + export). */
+export function parseFeedbackFilters(
+  sp: Record<string, string | string[] | undefined>,
+): FeedbackFilters {
+  const one = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
+  const ratingStr = one(sp.rating);
+  return {
+    q: one(sp.q),
+    from: one(sp.from),
+    to: one(sp.to),
+    staff: one(sp.staff)?.split(",").filter(Boolean),
+    rating: ratingStr ? [Number(ratingStr)] : undefined,
+    low: one(sp.low) === "1",
+    rec: one(sp.rec) as FeedbackFilters["rec"],
+    consult: one(sp.consult) as FeedbackFilters["consult"],
+    lang: one(sp.lang) as FeedbackFilters["lang"],
+    source: one(sp.source),
+    status: one(sp.status) as FeedbackFilters["status"],
+    hasSuggestion: one(sp.sugg) === "1",
+    hasRecognition: one(sp.recog) === "1",
+    sort: (one(sp.sort) as FeedbackFilters["sort"]) ?? "date",
+    dir: (one(sp.dir) as "asc" | "desc") ?? "desc",
+    page: Number(one(sp.page) ?? "1") || 1,
+  };
+}
+
 /** Mask a mobile number for the viewer role: 98xxxxxx29. */
 export function maskMobile(m: string): string {
   if (m.length < 4) return "••••";
@@ -132,6 +159,91 @@ export async function getFeedbackList(
   } catch {
     return sampleList(f, page);
   }
+}
+
+export interface ExportRow extends Feedback {
+  staff_name: string;
+}
+
+/** All rows matching the filters (no pagination) for CSV/XLSX export. */
+export async function getExportRows(f: FeedbackFilters): Promise<{
+  live: boolean;
+  rows: ExportRow[];
+}> {
+  if (!authConfigured()) return { live: false, rows: sampleExportRows(f) };
+  try {
+    const supabase = await createClient();
+    let query = supabase
+      .from("feedback")
+      .select("*, opd_staff:opd_staff_id(name_en)");
+
+    if (f.q) {
+      const q = f.q.replace(/[%,]/g, " ").trim();
+      query = query.or(
+        `patient_name.ilike.%${q}%,mrd_number.ilike.%${q}%,mobile.ilike.%${q}%`,
+      );
+    }
+    if (f.from) query = query.gte("visit_date", f.from);
+    if (f.to) query = query.lte("visit_date", f.to);
+    if (f.staff?.length) query = query.in("opd_staff_id", f.staff);
+    if (f.low) query = query.lte("overall_rating", 2);
+    else if (f.rating?.length) query = query.in("overall_rating", f.rating);
+    if (f.rec) query = query.eq("would_recommend", f.rec);
+    if (f.consult) query = query.eq("consultant_info", f.consult);
+    if (f.lang) query = query.eq("language", f.lang);
+    if (f.source) query = query.eq("source", f.source);
+    if (f.status) query = query.eq("status", f.status);
+    if (f.hasSuggestion) query = query.not("suggestions", "is", null);
+    if (f.hasRecognition) query = query.not("employee_recognition", "is", null);
+    query = query.order("created_at", { ascending: false }).limit(10000);
+
+    const { data, error } = await query;
+    if (error) return { live: false, rows: sampleExportRows(f) };
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const rows: ExportRow[] = (data ?? []).map((r: any) => ({
+      ...(r as Feedback),
+      staff_name: r.opd_staff?.name_en ?? "—",
+    }));
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return { live: true, rows };
+  } catch {
+    return { live: false, rows: sampleExportRows(f) };
+  }
+}
+
+function sampleExportRows(f: FeedbackFilters): ExportRow[] {
+  return sampleList({ ...f, page: 1 }, 1).rows.concat(
+    sampleList({ ...f, page: 2 }, 2).rows,
+  ).map((r) => ({
+    id: r.id,
+    created_at: r.created_at,
+    visit_date: r.visit_date,
+    patient_name: r.patient_name,
+    mrd_number: r.mrd_number,
+    mobile: r.mobile,
+    opd_staff_id: "seed-1",
+    reception_rating: r.reception_rating,
+    billing_rating: 4,
+    waiting_rating: 3,
+    consultant_info: r.overall_rating <= 2 ? "no" : "yes",
+    doctor_rating: r.overall_rating,
+    exam_rating: 4,
+    cleanliness_rating: r.cleanliness_rating,
+    pharmacy_rating: 4,
+    staff_helpful: "yes",
+    overall_rating: r.overall_rating,
+    employee_recognition: null,
+    would_recommend: r.would_recommend,
+    suggestions: r.has_suggestion ? "Please add more seating." : null,
+    language: r.language,
+    source: "reception",
+    ip_hash: null,
+    status: r.status,
+    admin_notes: null,
+    reviewed_by: null,
+    reviewed_at: null,
+    staff_name: r.staff_name,
+  }));
 }
 
 export interface FeedbackDetail extends Feedback {

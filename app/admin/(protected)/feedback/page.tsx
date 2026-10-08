@@ -3,40 +3,18 @@ import { getAdmin } from "@/lib/auth";
 import {
   getFeedbackList,
   maskMobile,
+  parseFeedbackFilters,
   PAGE_SIZE,
-  type FeedbackFilters,
 } from "@/lib/feedback-list";
 import { formatIST } from "@/lib/dates";
 import { Card, Stars, StatusPill } from "@/components/admin/ui";
 import FilterBar from "@/components/admin/feedback/FilterBar";
-import type { YesNo, ConsultantInfo, Language, FeedbackStatus } from "@/types/database";
+import ExportButton from "@/components/admin/feedback/ExportButton";
 
 export const dynamic = "force-dynamic";
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-
-function parseFilters(sp: SP): FeedbackFilters {
-  const ratingStr = one(sp.rating);
-  return {
-    q: one(sp.q),
-    from: one(sp.from),
-    to: one(sp.to),
-    staff: one(sp.staff)?.split(",").filter(Boolean),
-    rating: ratingStr ? [Number(ratingStr)] : undefined,
-    low: one(sp.low) === "1",
-    rec: one(sp.rec) as YesNo | undefined,
-    consult: one(sp.consult) as ConsultantInfo | undefined,
-    lang: one(sp.lang) as Language | undefined,
-    source: one(sp.source),
-    status: one(sp.status) as FeedbackStatus | undefined,
-    hasSuggestion: one(sp.sugg) === "1",
-    hasRecognition: one(sp.recog) === "1",
-    sort: (one(sp.sort) as FeedbackFilters["sort"]) ?? "date",
-    dir: (one(sp.dir) as "asc" | "desc") ?? "desc",
-    page: Number(one(sp.page) ?? "1") || 1,
-  };
-}
 
 function qs(base: SP, patch: Record<string, string | undefined>) {
   const p = new URLSearchParams();
@@ -58,7 +36,7 @@ export default async function FeedbackListPage({
   searchParams: Promise<SP>;
 }) {
   const sp = await searchParams;
-  const filters = parseFilters(sp);
+  const filters = parseFeedbackFilters(sp);
   const [admin, result] = await Promise.all([getAdmin(), getFeedbackList(filters)]);
   const isViewer = admin?.role !== "admin";
 
@@ -92,12 +70,13 @@ export default async function FeedbackListPage({
       </Card>
 
       <Card className="!p-0">
-        <div className="flex items-center justify-between px-[18px] py-3 text-[12.5px] text-muted">
+        <div className="flex items-center justify-between gap-3 px-[18px] py-3 text-[12.5px] text-muted">
           <span>
             {result.total === 0
               ? "No results"
               : `Showing ${from}–${to} of ${result.total.toLocaleString("en-IN")}`}
           </span>
+          {!isViewer && <ExportButton />}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse">
