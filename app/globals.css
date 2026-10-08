@@ -49,3 +49,42 @@ html[lang="kn"] body {
     transition-duration: 0.001ms !important;
   }
 }
+
+@layer components {
+  /* Patient-form building blocks (hand-styled, mobile-first). */
+  .fb-card {
+    @apply rounded-card bg-surface p-[18px] shadow-soft;
+  }
+  .fb-label {
+    @apply mb-1.5 block text-[12.5px] font-semibold text-muted;
+  }
+  .fb-input {
+    @apply w-full rounded-field border-[1.5px] border-divider bg-surface px-3.5 py-3
+      text-base text-ink outline-none transition
+      placeholder:text-muted
+      focus:border-primary focus:ring-[3px] focus:ring-primary-tint;
+    min-height: 50px;
+  }
+  .fb-field-invalid .fb-input {
+    @apply border-crit;
+  }
+  .fb-err {
+    @apply mt-1.5 text-xs font-medium text-crit;
+  }
+  /* native select chevron */
+  .fb-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%235F6F86' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    padding-right: 40px;
+  }
+  .fb-spin {
+    animation: fb-sp 0.7s linear infinite;
+  }
+  @keyframes fb-sp {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
