@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -13,6 +14,9 @@ import FormHeader from "./FormHeader";
 import FormFooter from "./FormFooter";
 import StarRating from "./StarRating";
 import ChoiceGroup from "./ChoiceGroup";
+import Turnstile from "./Turnstile";
+
+const DRAFT_KEY = "fb-draft";
 
 // Order used to scroll to the first error.
 const FIELD_ORDER: (keyof FeedbackInput)[] = [
@@ -26,16 +30,20 @@ const FIELD_ORDER: (keyof FeedbackInput)[] = [
 
 export default function FeedbackForm({ staff }: { staff: StaffOption[] }) {
   const { t, lang } = useLanguage();
+  const router = useRouter();
   const today = todayIST();
-  const [submitted, setSubmitted] = useState(false);
   const [suggLen, setSuggLen] = useState(0);
+  const [token, setToken] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const honeypotRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FeedbackInput>({
     resolver: zodResolver(feedbackSchema),
@@ -65,6 +73,30 @@ export default function FeedbackForm({ staff }: { staff: StaffOption[] }) {
     if (src) setValue("source", src.slice(0, 60));
   }, [setValue]);
 
+  // Restore an in-progress draft (survives an accidental back-swipe).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY);
+      if (raw) reset({ ...(JSON.parse(raw) as Partial<FeedbackInput>) });
+    } catch {
+      /* ignore */
+    }
+  }, [reset]);
+
+  // Autosave draft to sessionStorage as the patient fills the form.
+  useEffect(() => {
+    const sub = watch((values) => {
+      try {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(values));
+      } catch {
+        /* ignore */
+      }
+    });
+    return () => sub.unsubscribe();
+  }, [watch]);
+
+  const handleToken = useCallback((tk: string) => setToken(tk), []);
+
   const err = (key: keyof FeedbackInput) => {
     const m = errors[key]?.message as StringKey | undefined;
     return m ? t[m] ?? t.errRequired : null;
@@ -80,39 +112,35 @@ export default function FeedbackForm({ staff }: { staff: StaffOption[] }) {
     });
   }
 
-  function onValid(data: FeedbackInput) {
-    // Phase 4 will POST this to /api/feedback and redirect to /thank-you.
-    // For now, confirm the form is complete and valid.
-    console.log("feedback payload", data);
-    setSubmitted(true);
-    window.scrollTo({ top: 0 });
-  }
-
-  if (submitted) {
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-form flex-col items-center justify-center px-8 text-center">
-        <div className="mb-5 grid h-[92px] w-[92px] place-items-center rounded-full bg-ok shadow-card">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#fff"
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-12 w-12"
-          >
-            <path d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h2 className="mb-2.5 font-display text-[23px] font-semibold text-ink">
-          {t.thanksTitle}
-        </h2>
-        <p className="max-w-[30ch] text-[14.5px] text-muted">{t.thanksBody}</p>
-        <p className="mt-6 text-xs text-muted">
-          (Phase 3 preview — real submission + thank-you page come in Phase 4.)
-        </p>
-      </div>
-    );
+  async function onValid(data: FeedbackInput) {
+    setSubmitError(null);
+    const payload = {
+      ...data,
+      turnstileToken: token || undefined,
+      website: honeypotRef.current?.value ?? "",
+    };
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (res.ok && json.ok) {
+        try {
+          sessionStorage.setItem("fb-submitted", "1");
+          sessionStorage.removeItem(DRAFT_KEY);
+        } catch {
+          /* ignore */
+        }
+        router.replace("/thank-you");
+        return;
+      }
+      setSubmitError(res.status === 429 ? t.errRate : t.errSubmit);
+    } catch {
+      setSubmitError(t.errSubmit);
+    }
+    window.scrollTo({ top: document.body.scrollHeight });
   }
 
   const invalidCls = (f: keyof FeedbackInput) =>
@@ -128,9 +156,10 @@ export default function FeedbackForm({ staff }: { staff: StaffOption[] }) {
         noValidate
         className="relative z-10 -mt-9 flex flex-col gap-3.5 px-3.5 pb-32"
       >
-        {/* honeypot (hidden) */}
+        {/* honeypot (hidden) — bots fill it, humans never see it */}
         <input
-          {...register("website" as never)}
+          ref={honeypotRef}
+          name="website"
           type="text"
           tabIndex={-1}
           autoComplete="off"
@@ -343,6 +372,18 @@ export default function FeedbackForm({ staff }: { staff: StaffOption[] }) {
           </svg>
           <span>{t.consent}</span>
         </div>
+
+        {/* bot protection (renders only when a site key is configured) */}
+        <Turnstile onToken={handleToken} />
+
+        {submitError && (
+          <div
+            role="alert"
+            className="rounded-field border-[1.5px] border-crit bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-crit"
+          >
+            {submitError}
+          </div>
+        )}
 
         <FormFooter />
       </form>

@@ -56,6 +56,8 @@ export const en = {
   errChoice: "Please choose an option",
   errStaff: "Please select who assisted you",
   errDate: "Please choose a valid date",
+  errSubmit: "Sorry, we couldn't send your feedback. Please try again.",
+  errRate: "Too many submissions. Please wait a few minutes and try again.",
 
   // consent + thanks
   consent:
