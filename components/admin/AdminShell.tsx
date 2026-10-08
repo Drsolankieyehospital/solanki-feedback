@@ -54,7 +54,7 @@ export default function AdminShell({
     <div className="flex min-h-dvh bg-canvas">
       {/* sidebar / drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] max-w-[84vw] flex-col bg-surface p-3.5 pt-5 shadow-[0_0_40px_rgba(10,20,40,.25)] transition-transform duration-200 md:static md:z-auto md:w-[232px] md:shadow-none md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] max-w-[84vw] flex-col bg-surface p-3.5 pt-5 shadow-[0_0_40px_rgba(10,20,40,.25)] transition-transform duration-200 print:hidden md:static md:z-auto md:w-[232px] md:shadow-none md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         } md:border-r md:border-divider`}
       >
@@ -138,7 +138,7 @@ export default function AdminShell({
 
       {/* main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-divider bg-canvas/85 px-4 py-3 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-divider bg-canvas/85 px-4 py-3 backdrop-blur print:hidden md:px-6">
           <button
             type="button"
             aria-label="Open menu"
