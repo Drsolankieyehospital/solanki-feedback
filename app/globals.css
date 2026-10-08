@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Dr. Solanki Eye Hospital — blue clinical DNA tokens.
+  NOTE: --primary* is a hospital-appropriate stand-in (#1E5BB8).
+  Swap these three/four values for the real brand hex when available.
+*/
+:root {
+  --primary: #1e5bb8;
+  --primary-deep: #154291;
+  --primary-soft: #2a6bc9;
+  --primary-tint: #e4edf9;
+  --canvas: #f3f6fb;
+  --surface: #ffffff;
+  --divider: #e3e9f2;
+  --text: #14233b;
+  --muted: #5f6f86;
+  --success: #2e9e6b;
+  --crit: #c62828;
+  --rating: #f2b03a;
+  --rating-empty: #d7dee9;
+  --track: #eaeff6;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Kannada: when the active language is kn, prefer the Kannada face. */
+html[lang="kn"] body {
+  font-family: var(--font-kn), var(--font-inter), system-ui, sans-serif;
+}
+
+/* Respect reduced motion everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
