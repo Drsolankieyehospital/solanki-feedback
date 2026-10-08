@@ -6,7 +6,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { QUESTIONS } from "@/lib/questions";
-import { feedbackSchema, type FeedbackInput } from "@/lib/validation/feedback";
+import {
+  feedbackSchema,
+  MAX_PER_DEVICE,
+  type FeedbackInput,
+} from "@/lib/validation/feedback";
 import type { StringKey } from "@/lib/i18n/en";
 import type { StaffOption } from "@/lib/staff";
 import { todayIST, daysAgoIST } from "@/lib/dates";
@@ -17,6 +21,39 @@ import ChoiceGroup from "./ChoiceGroup";
 import Turnstile from "./Turnstile";
 
 const DRAFT_KEY = "fb-draft";
+const DEVICE_KEY = "fb-device";
+const COUNT_KEY = "fb-count";
+
+/** Stable per-device id in localStorage (one line of defence; server enforces). */
+function getDeviceId(): string {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id =
+        (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).slice(0, 64);
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    return "";
+  }
+}
+
+function getSubmitCount(): number {
+  try {
+    return Number(localStorage.getItem(COUNT_KEY) ?? "0") || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function bumpSubmitCount() {
+  try {
+    localStorage.setItem(COUNT_KEY, String(getSubmitCount() + 1));
+  } catch {
+    /* ignore */
+  }
+}
 
 // Order used to scroll to the first error.
 const FIELD_ORDER: (keyof FeedbackInput)[] = [
@@ -114,10 +151,19 @@ export default function FeedbackForm({ staff }: { staff: StaffOption[] }) {
 
   async function onValid(data: FeedbackInput) {
     setSubmitError(null);
+
+    // Immediate client-side device cap (the server enforces it authoritatively).
+    if (getSubmitCount() >= MAX_PER_DEVICE) {
+      setSubmitError(t.errDeviceLimit);
+      window.scrollTo({ top: document.body.scrollHeight });
+      return;
+    }
+
     const payload = {
       ...data,
       turnstileToken: token || undefined,
       website: honeypotRef.current?.value ?? "",
+      deviceId: getDeviceId(),
     };
     try {
       const res = await fetch("/api/feedback", {
@@ -125,8 +171,12 @@ export default function FeedbackForm({ staff }: { staff: StaffOption[] }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
       if (res.ok && json.ok) {
+        bumpSubmitCount();
         try {
           sessionStorage.setItem("fb-submitted", "1");
           sessionStorage.removeItem(DRAFT_KEY);
@@ -136,7 +186,17 @@ export default function FeedbackForm({ staff }: { staff: StaffOption[] }) {
         router.replace("/thank-you");
         return;
       }
-      setSubmitError(res.status === 429 ? t.errRate : t.errSubmit);
+      if (json.error === "device_limit") {
+        // keep the client counter in sync so the block persists on this device
+        try {
+          localStorage.setItem(COUNT_KEY, String(MAX_PER_DEVICE));
+        } catch {
+          /* ignore */
+        }
+        setSubmitError(t.errDeviceLimit);
+      } else {
+        setSubmitError(res.status === 429 ? t.errRate : t.errSubmit);
+      }
     } catch {
       setSubmitError(t.errSubmit);
     }

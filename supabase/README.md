@@ -5,7 +5,8 @@ Run these against the project's Postgres **in order**:
 1. `migrations/0001_init.sql` — tables, enums, indexes, `is_admin()`
 2. `migrations/0002_rls.sql` — Row Level Security policies
 3. `migrations/0003_reports.sql` — report RPC functions
-4. `seed.sql` — the 9 OPD staff
+4. `migrations/0004_device_limit.sql` — per-device submission limit columns
+5. `seed.sql` — the 9 OPD staff
 
 ## Easiest: Supabase SQL Editor
 

@@ -45,6 +45,8 @@ export interface Feedback {
   language: Language;
   source: string;
   ip_hash: string | null;
+  device_hash: string | null;
+  client_hash: string | null;
 
   status: FeedbackStatus;
   admin_notes: string | null;
@@ -58,6 +60,8 @@ export type FeedbackInsert = Omit<
   | "id"
   | "created_at"
   | "ip_hash"
+  | "device_hash"
+  | "client_hash"
   | "status"
   | "admin_notes"
   | "reviewed_by"

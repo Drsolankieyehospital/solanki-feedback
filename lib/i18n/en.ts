@@ -58,6 +58,8 @@ export const en = {
   errDate: "Please choose a valid date",
   errSubmit: "Sorry, we couldn't send your feedback. Please try again.",
   errRate: "Too many submissions. Please wait a few minutes and try again.",
+  errDeviceLimit:
+    "This device has already submitted feedback the maximum number of times. Thank you!",
 
   // consent + thanks
   consent:

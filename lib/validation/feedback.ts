@@ -68,8 +68,12 @@ export const feedbackSchema = z.object({
 export type FeedbackInput = z.input<typeof feedbackSchema>;
 export type FeedbackParsed = z.output<typeof feedbackSchema>;
 
+// Max feedback submissions allowed from one device.
+export const MAX_PER_DEVICE = 2;
+
 // The server adds a Turnstile token + honeypot; kept separate from the DB shape.
 export const feedbackRequestSchema = feedbackSchema.extend({
   turnstileToken: z.string().optional(),
   website: z.string().optional(), // honeypot — must be empty
+  deviceId: z.string().max(64).optional(), // localStorage device id
 });

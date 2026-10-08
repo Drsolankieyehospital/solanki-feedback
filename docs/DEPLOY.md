@@ -8,7 +8,8 @@ steps to take it live.
 1. Create a project at [supabase.com](https://supabase.com) (region close to
    Bengaluru, e.g. Mumbai / `ap-south-1`).
 2. SQL Editor → run, in order (see `supabase/README.md`):
-   `0001_init.sql`, `0002_rls.sql`, `0003_reports.sql`, then `seed.sql`.
+   `0001_init.sql`, `0002_rls.sql`, `0003_reports.sql`,
+   `0004_device_limit.sql`, then `seed.sql`.
 3. **Disable public sign-ups:** Authentication → Providers → Email → turn off
    "Allow new users to sign up".
 4. Create the first admin: Authentication → Users → Add user (10+ char
