@@ -54,16 +54,19 @@ Inter (body), **Noto Sans Kannada** (Kannada).
 
 See `docs/PLAN.md` → "Routes and folder structure".
 
-## Build phases (do one at a time)
+## Build phases — all code complete ✅
 
 1. ✅ Setup — scaffold, Supabase helpers, fonts, tokens, CLAUDE.md
-2. Database — migrations (init / RLS / reports) + seed + TS types
-3. i18n + patient form UI
-4. Submission endpoint + thank-you
-5. Admin auth + sidebar
-6. Dashboard
-7. Feedback list, search, detail
-8. Reports (staff / date)
-9. Export (CSV / XLSX)
-10. Backups + QR + staff/users admin + manual entry
-11. Hardening + deploy
+2. ✅ Database — migrations (init / RLS / reports) + seed + TS types
+3. ✅ i18n + patient form UI
+4. ✅ Submission endpoint + thank-you
+5. ✅ Admin auth + sidebar
+6. ✅ Dashboard
+7. ✅ Feedback list, search, detail
+8. ✅ Reports (staff / date)
+9. ✅ Export (CSV / XLSX)
+10. ✅ Backups + QR + staff/users admin + manual entry
+11. ✅ Hardening (error/404/loading, robots, CSP) + deploy docs
+
+**Go-live:** connect Supabase + Turnstile + Vercel per `docs/DEPLOY.md`.
+Everything flips from sample data to live automatically when env vars are set.
